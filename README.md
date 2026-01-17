@@ -22,20 +22,28 @@ A command-line coding agent powered by Ollama and Qwen 2.5 Coder that can read, 
 
 1. Install Ollama from [https://ollama.ai/](https://ollama.ai/)
 
-2. Pull the Qwen 2.5 Coder model:
+2. Start the Ollama service:
+
+```bash
+ollama serve
+```
+
+(Keep this running in a separate terminal)
+
+3. Pull the Qwen 2.5 Coder model (in a new terminal):
 
 ```bash
 ollama pull qwen2.5-coder:14b
 ```
 
-3. Clone this repository:
+4. Clone this repository:
 
 ```bash
 git clone <repository-url>
 cd offline_cursor
 ```
 
-4. Create a virtual environment and install dependencies:
+5. Create a virtual environment and install dependencies:
 
 ```bash
 python -m venv .venv
@@ -95,7 +103,3 @@ The agent uses the following Ollama parameters (configured in [coding_agent.py:4
 - 30-second timeout for shell commands
 - Works best with structured coding tasks
 - Requires Ollama to be running locally
-
-## License
-
-See LICENSE file for details.
