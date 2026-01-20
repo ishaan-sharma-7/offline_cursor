@@ -8,45 +8,37 @@ from typing import Any, Dict, List, Tuple, Set
 import hashlib
 
 
-SYSTEM_PROMPT = """You are Qwen, a coding agent. Call tools to complete tasks.
+SYSTEM_PROMPT = """You are Qwen, a coding agent that completes tasks by calling tools.
 
 TOOLS:
 {tool_list_repr}
 
-FORMAT:
-tool: tool_name({{'key': 'value'}})
-
-CRITICAL RULES:
-1. Do NOT explain what you will do. Just call the tool.
-2. Do NOT say "I will now..." or "Let me...". Just call the tool.
-3. Only ONE tool call per response.
-4. For newlines in content, use \\n (backslash-n), not actual line breaks.
-
-CORRECT example:
-tool: write_file({{'path': 'app.py', 'content': 'import os\\nimport sys\\n\\ndef main():\\n    print("hello")\\n\\nif __name__ == "__main__":\\n    main()'}})
-
-WRONG - Do not do this:
-"I will create a file called app.py with the following content..."
-(This is wrong because you explained instead of calling the tool)
-
-WORKFLOW:
-1. Create files: write_file
-2. Edit files: view_file first, then replace_lines/insert_lines/delete_lines
-3. Run code: run_command
-4. If errors: view_file, fix with replace_lines, run again
+FORMAT: tool: tool_name({{'key': 'value'}})
 
 RULES:
-- Line numbers start at 1
-- Always view_file before editing
-- Do not delete files you just created unless asked
-- Do not create "test" files - work on the actual task files
+1. Call tools directly - no explanations
+2. One tool per response - act immediately
+3. For newlines in file content, use \\n
+4. CRITICAL: Keep each file under 60 lines. If logic is complex, split into multiple small files.
 
-FILE PATH WARNING:
-When Python code creates files (like reports), they are written relative to WHERE YOU RUN THE COMMAND, not where the script lives.
-Example: If you run `python myproject/demo.py` and demo.py writes to "report.txt", the file appears in the CURRENT directory, not in myproject/.
-Solution: In your generated code, use explicit paths like "myproject/report.txt" or use __file__ to get the script's directory.
+MULTI-FILE PROJECTS:
+If the task requires multiple files, create them in sequence before running.
+Do NOT run code until all required files exist.
+Break complex logic into small, focused files (20-60 lines each).
 
-If view_file says "not found", use list_files to check both the current directory AND the project directory."""
+PARSE ERRORS:
+If you get "missing closing parenthesis" or "Incomplete tool call":
+- The file content is TOO LONG to parse
+- Split the file into 2-3 smaller files instead
+- Example: Instead of one 100-line algorithms.py, create bubble_sort.py, quick_sort.py, merge_sort.py
+
+ERRORS:
+- Read error messages - they contain line numbers
+- view_file → fix with replace_lines → run again
+- returncode=0 = success, stop editing
+
+FILE PATHS:
+Use explicit paths or __file__ in generated code."""
 
 YOU_COLOR = "\033[94m"
 ASSISTANT_COLOR = "\033[93m"
@@ -562,8 +554,12 @@ def detect_loop(action_history: List[str], error_history: List[str]) -> str:
     Detect if we're in a loop. Returns a correction message if looping, empty string otherwise.
     error_history tracks recent errors to detect "trying same failing thing repeatedly"
     """
-    if len(action_history) < 4:
+    if len(action_history) < 3:
         return ""
+
+    if len(error_history) >= 2:
+        if error_history[-1] == error_history[-2]:
+            return "STOP. Same error twice in a row. Read the error message carefully - it tells you the exact line number to fix."
 
     recent = action_history[-6:]
 
@@ -635,8 +631,12 @@ def run_coding_agent_loop():
 
                 if parse_error:
                     print(f"  {ERROR_COLOR}⚠️ Parse error: {parse_error}{RESET_COLOR}")
+                    if "missing closing parenthesis" in parse_error or "Incomplete tool call" in parse_error:
+                        guidance = "ERROR: File content too long to parse. Split into smaller files (under 80 lines each) or simplify the code."
+                    else:
+                        guidance = f"ERROR: {parse_error}"
                     conversation.append({"role": "assistant", "content": response})
-                    conversation.append({"role": "user", "content": f"ERROR: {parse_error}"})
+                    conversation.append({"role": "user", "content": guidance})
                     continue
 
                 print(f"  {ERROR_COLOR}⚠️ No tool call in response{RESET_COLOR}")
@@ -682,9 +682,27 @@ def run_coding_agent_loop():
             if name == "write_file" and result.get("action") == "written":
                 created_files.add(args.get("path", ""))
 
-            result_str = json.dumps(result)
-            if len(result_str) > 3000:
-                result_str = result_str[:3000] + "...(truncated)"
+            if name == "run_command":
+                returncode = result.get("returncode", 0)
+                stderr = result.get("stderr", "").strip()
+                stdout = result.get("stdout", "").strip()
+                
+                if returncode != 0:
+                    if stderr:
+                        error_history.append(stderr)
+                        if len(error_history) > 5:
+                            error_history.pop(0)
+                    result_str = f"ERROR:\n{stderr}\n\nFull result: {json.dumps(result)}"
+                
+                elif not stdout and not stderr:
+                    result_str = f"{json.dumps(result)}\n\nSUCCESS: Program ran successfully (returncode=0). Interactive programs like games don't produce console output. Task complete."
+                
+                else:
+                    result_str = json.dumps(result)
+            else:
+                result_str = json.dumps(result)
+                if len(result_str) > 3000:
+                    result_str = result_str[:3000] + "...(truncated)"
 
             if hint:
                 conversation.append({"role": "user", "content": f"Result: {result_str}\n\nHINT: {hint}"})
