@@ -70,7 +70,7 @@ def get_full_system_prompt():
 def execute_llm_call(conversation: List[Dict[str, str]]):
     """Execute an LLM call via Ollama."""
     response = ollama.chat(
-        model="qwen2.5-coder:14b",
+        model="qwen2.5-coder:14b", # use your local Ollama model
         messages=conversation,
         options={
             "temperature": 0.0,
