@@ -2,6 +2,33 @@
 
 A command-line coding agent powered by Ollama and Qwen 2.5 Coder that can read, write, edit files, run commands, and complete coding tasks entirely offline.
 
+## Project Structure
+
+```
+offline_cursor/
+├── coding_agent.py       # Main agent loop and LLM interaction (215 lines)
+├── utils/                # Utilities package (630 lines total)
+│   ├── __init__.py       # Package exports (46 lines)
+│   ├── tools.py          # File operation tools (233 lines)
+│   ├── registry.py       # Tool registry and execution (68 lines)
+│   ├── parsing.py        # Tool invocation parsing (147 lines)
+│   ├── display.py        # UI and colored output (69 lines)
+│   └── loop_detection.py # Prevents repetitive actions (67 lines)
+├── requirements.txt      # Python dependencies
+└── README.md             # This file
+```
+
+**Code Organization:**
+
+- **coding_agent.py** - Core agent logic, system prompt, and main loop
+- **utils/** - Organized utilities package:
+  - **tools.py** - All file operations (read, write, edit, delete, search, commands)
+  - **registry.py** - Tool registry and execution dispatcher
+  - **parsing.py** - Extracts tool calls from LLM responses
+  - **display.py** - Colored terminal output and user input
+  - **loop_detection.py** - Detects and prevents infinite loops
+  - **\_\_init\_\_.py** - Clean package interface with exports
+
 ## Features
 
 - **File Operations**: Create, read, edit, and delete files
@@ -80,13 +107,14 @@ The agent has access to the following tools:
 
 ## Configuration
 
-The agent uses the following Ollama parameters (configured in [coding_agent.py:454-459](coding_agent.py#L454-L459)):
+The agent uses the following Ollama parameters (configured in [coding_agent.py](coding_agent.py)):
 
-- Model: `qwen2.5-coder:14b`
+- Model: `qwen2.5-coder:14b` (edit in `execute_llm_call()` function)
 - Temperature: `0.0` (deterministic)
 - Max tokens: `4096`
 - Context window: `8192`
-- Timeout: `30 seconds` for shell commands
+- Max steps: `50` per request
+- Command timeout: `30 seconds` (configured in [utils.py](utils.py))
 
 ## How It Works
 
