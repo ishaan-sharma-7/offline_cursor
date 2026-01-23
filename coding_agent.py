@@ -1,3 +1,4 @@
+import argparse
 import json
 import ollama
 from typing import Dict, List, Set
@@ -22,6 +23,10 @@ from utils import (
     # Loop detection
     get_action_signature,
     detect_loop,
+    # Config and approval
+    init_config,
+    get_config,
+    request_approval,
 )
 
 
@@ -82,14 +87,22 @@ def execute_llm_call(conversation: List[Dict[str, str]]):
     return response['message']['content']
 
 
-def run_coding_agent_loop():
+def run_coding_agent_loop(auto_mode: bool = False):
+    # Initialize config
+    config = init_config(auto_mode=auto_mode)
+
     conversation = [{"role": "system", "content": get_full_system_prompt()}]
     MAX_STEPS = 50
 
     created_files: Set[str] = set()
     action_history: List[str] = []
 
-    print(f"{SUCCESS_COLOR}Coding Agent Ready. Type your request, then 'SUBMIT' to send.{RESET_COLOR}")
+    # Show startup message with mode indicator
+    mode_str = f"{ASSISTANT_COLOR}AUTO{RESET_COLOR}" if config.is_auto_mode() else f"{SUCCESS_COLOR}MANUAL{RESET_COLOR}"
+    print(f"{SUCCESS_COLOR}Coding Agent Ready{RESET_COLOR} [{mode_str} mode]")
+    print(f"Type your request, then 'SUBMIT' to send.")
+    if not config.is_auto_mode():
+        print(f"{YOU_COLOR}Human approval required for file changes and commands.{RESET_COLOR}")
     print(f"Press Ctrl+C to exit.\n")
 
     while True:
@@ -167,6 +180,14 @@ def run_coding_agent_loop():
                 error_history.clear()
                 continue
 
+            # Request approval for risky operations
+            approved, feedback = request_approval(name, args)
+            if not approved:
+                print(f"  {ERROR_COLOR}✗ Action rejected{RESET_COLOR}")
+                conversation.append({"role": "assistant", "content": response})
+                conversation.append({"role": "user", "content": feedback})
+                continue
+
             conversation.append({"role": "assistant", "content": response})
 
             result = execute_tool(name, args)
@@ -215,5 +236,27 @@ def run_coding_agent_loop():
             conversation = [conversation[0], {"role": "user", "content": summary}] + conversation[-25:]
 
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Local coding agent with human-in-the-loop approval",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Modes:
+  Default (manual):  Requires approval for file changes and commands
+  Auto (--auto):     Executes all operations automatically
+
+During a session, type 'a' or 'auto' at any approval prompt to switch to auto mode.
+        """
+    )
+    parser.add_argument(
+        "--auto", "-a",
+        action="store_true",
+        help="Run in auto mode (no approval prompts for actions)"
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    run_coding_agent_loop()
+    args = parse_args()
+    run_coding_agent_loop(auto_mode=args.auto)

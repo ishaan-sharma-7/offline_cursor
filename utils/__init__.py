@@ -23,6 +23,17 @@ from .registry import (
     get_tool_str_representation,
     execute_tool,
 )
+from .config import (
+    ApprovalMode,
+    AgentConfig,
+    get_config,
+    init_config,
+)
+from .approval import (
+    ToolRisk,
+    get_tool_risk,
+    request_approval,
+)
 
 __all__ = [
     # Display
@@ -43,4 +54,13 @@ __all__ = [
     'TOOL_REGISTRY',
     'get_tool_str_representation',
     'execute_tool',
+    # Config
+    'ApprovalMode',
+    'AgentConfig',
+    'get_config',
+    'init_config',
+    # Approval
+    'ToolRisk',
+    'get_tool_risk',
+    'request_approval',
 ]
