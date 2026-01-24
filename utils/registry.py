@@ -12,6 +12,8 @@ from .tools import (
     view_file_tool,
     search_in_files_tool,
     delete_tool,
+    check_installed_tool,
+    list_environment_tool,
 )
 
 
@@ -27,6 +29,8 @@ TOOL_REGISTRY = {
     "view_file": view_file_tool,
     "search_in_files": search_in_files_tool,
     "delete": delete_tool,
+    "check_installed": check_installed_tool,
+    "list_environment": list_environment_tool,
 }
 
 
@@ -62,6 +66,10 @@ def execute_tool(name: str, args: Dict) -> Dict:
             return tool(args.get("pattern", ""), args.get("path", "."), args.get("file_pattern", "*.py"))
         elif name == "delete":
             return tool(args.get("path", ""))
+        elif name == "check_installed":
+            return tool(args.get("package_type", ""), args.get("package_name", ""))
+        elif name == "list_environment":
+            return tool()
         else:
             return {"error": f"No handler for tool: {name}"}
     except Exception as e:

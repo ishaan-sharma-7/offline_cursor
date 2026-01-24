@@ -231,3 +231,59 @@ def delete_tool(path: str) -> Dict[str, Any]:
             return {"path": str(full_path), "action": "deleted_directory"}
     except Exception as e:
         return {"path": str(full_path), "action": "error", "error": str(e)}
+
+
+def check_installed_tool(package_type: str, package_name: str) -> Dict[str, Any]:
+    """Check if a package/library is installed.
+
+    Args:
+        package_type: Type of package to check ('python', 'npm', or 'command')
+        package_name: Name of the package/command to check
+
+    Returns:
+        Dictionary with installation status and version info if available
+
+    Examples:
+        check_installed('python', 'requests')  # Check if requests is installed
+        check_installed('npm', 'express')      # Check if express is installed globally
+        check_installed('command', 'git')      # Check if git command is available
+    """
+    from .environment import check_package_installed
+
+    try:
+        result = check_package_installed(package_type, package_name)
+        return result
+    except Exception as e:
+        return {
+            "package_type": package_type,
+            "package_name": package_name,
+            "installed": False,
+            "error": str(e)
+        }
+
+
+def list_environment_tool() -> Dict[str, Any]:
+    """Get summary of current environment including installed runtimes and packages.
+
+    Returns:
+        Dictionary with environment information:
+        - Platform and Python version
+        - Available language runtimes (python, node, java, etc.)
+        - Count of installed Python and npm packages
+        - Working directory
+
+    Use this to understand what tools and libraries are available before attempting installations.
+    """
+    from .environment import get_environment_summary
+
+    try:
+        summary = get_environment_summary()
+        return {
+            "action": "environment_summary",
+            **summary
+        }
+    except Exception as e:
+        return {
+            "action": "error",
+            "error": str(e)
+        }

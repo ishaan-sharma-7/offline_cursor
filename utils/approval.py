@@ -20,6 +20,8 @@ TOOL_RISK_LEVELS: Dict[str, ToolRisk] = {
     "list_files": ToolRisk.SAFE,
     "view_file": ToolRisk.SAFE,
     "search_in_files": ToolRisk.SAFE,
+    "check_installed": ToolRisk.SAFE,
+    "list_environment": ToolRisk.SAFE,
     # Moderate - file modifications
     "write_file": ToolRisk.MODERATE,
     "insert_lines": ToolRisk.MODERATE,

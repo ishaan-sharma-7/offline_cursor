@@ -43,6 +43,14 @@ RULES:
 3. For newlines in file content, use \\n
 4. CRITICAL: Keep each file under 60 lines. If logic is complex, split into multiple small files.
 
+LIBRARY DETECTION (IMPORTANT):
+BEFORE installing packages, check if they're already available:
+- Use check_installed to verify specific packages: check_installed({{'package_type': 'python', 'package_name': 'requests'}})
+- Use list_environment to see available runtimes and environment summary
+- Package types: 'python' (pip packages), 'npm' (global npm packages), 'command' (system commands)
+- Only run pip/npm install if check_installed returns installed=False
+- This saves time and avoids unnecessary operations
+
 MULTI-FILE PROJECTS:
 If the task requires multiple files, create them in sequence before running.
 Do NOT run code until all required files exist.
