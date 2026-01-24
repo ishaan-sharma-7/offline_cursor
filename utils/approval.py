@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Dict, Any, Tuple
 from .config import get_config
 from .display import YOU_COLOR, ASSISTANT_COLOR, ERROR_COLOR, SUCCESS_COLOR, RESET_COLOR
+from .forbidden import validate_command, validate_path
 
 
 class ToolRisk(Enum):
@@ -87,6 +88,37 @@ def request_approval(name: str, args: Dict[str, Any]) -> Tuple[bool, str]:
     """
     config = get_config()
     risk = get_tool_risk(name)
+
+    # Forbidden actions validation (auto-block before approval)
+    if name == "run_command":
+        is_safe, error_msg = validate_command(
+            args.get("command", ""),
+            override_enabled=config.enable_forbidden_overrides
+        )
+        if not is_safe:
+            return False, f"FORBIDDEN: {error_msg}"
+
+    # Path validation (context-aware: read vs write)
+    if name in ("write_file", "delete", "insert_lines", "replace_lines", "delete_lines"):
+        path = args.get("path", "") or args.get("filename", "")
+        is_safe, error_msg = validate_path(
+            path,
+            operation='write',
+            override_enabled=config.enable_forbidden_overrides
+        )
+        if not is_safe:
+            return False, f"FORBIDDEN: {error_msg}"
+
+    # Read operations are allowed even on system paths (for debugging)
+    if name in ("read_file", "view_file"):
+        path = args.get("path", "") or args.get("filename", "")
+        is_safe, error_msg = validate_path(
+            path,
+            operation='read',
+            override_enabled=config.enable_forbidden_overrides
+        )
+        if not is_safe:
+            return False, f"FORBIDDEN: {error_msg}"
 
     # Safe tools always execute
     if risk == ToolRisk.SAFE:

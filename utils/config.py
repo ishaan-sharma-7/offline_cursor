@@ -14,6 +14,7 @@ class ApprovalMode(Enum):
 class AgentConfig:
     """Runtime configuration for the coding agent."""
     approval_mode: ApprovalMode = ApprovalMode.MANUAL
+    enable_forbidden_overrides: bool = False  # Allow overriding forbidden actions with confirmation
 
     def is_auto_mode(self) -> bool:
         """Check if running in auto mode."""
@@ -36,10 +37,11 @@ def get_config() -> AgentConfig:
     return _config
 
 
-def init_config(auto_mode: bool = False) -> AgentConfig:
+def init_config(auto_mode: bool = False, override_forbidden: bool = False) -> AgentConfig:
     """Initialize config with CLI arguments."""
     global _config
     _config = AgentConfig(
-        approval_mode=ApprovalMode.AUTO if auto_mode else ApprovalMode.MANUAL
+        approval_mode=ApprovalMode.AUTO if auto_mode else ApprovalMode.MANUAL,
+        enable_forbidden_overrides=override_forbidden
     )
     return _config

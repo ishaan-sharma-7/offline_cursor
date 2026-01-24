@@ -87,9 +87,9 @@ def execute_llm_call(conversation: List[Dict[str, str]]):
     return response['message']['content']
 
 
-def run_coding_agent_loop(auto_mode: bool = False):
+def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = False):
     # Initialize config
-    config = init_config(auto_mode=auto_mode)
+    config = init_config(auto_mode=auto_mode, override_forbidden=override_forbidden)
 
     conversation = [{"role": "system", "content": get_full_system_prompt()}]
     MAX_STEPS = 50
@@ -103,6 +103,9 @@ def run_coding_agent_loop(auto_mode: bool = False):
     print(f"Type your request, then 'SUBMIT' to send.")
     if not config.is_auto_mode():
         print(f"{YOU_COLOR}Human approval required for file changes and commands.{RESET_COLOR}")
+    if config.enable_forbidden_overrides:
+        print(f"{ERROR_COLOR}⚠️  WARNING: Forbidden action overrides are ENABLED{RESET_COLOR}")
+        print(f"{ERROR_COLOR}   Dangerous operations may be allowed with confirmation{RESET_COLOR}")
     print(f"Press Ctrl+C to exit.\n")
 
     while True:
@@ -254,9 +257,14 @@ During a session, type 'a' or 'auto' at any approval prompt to switch to auto mo
         action="store_true",
         help="Run in auto mode (no approval prompts for actions)"
     )
+    parser.add_argument(
+        "--override-forbidden",
+        action="store_true",
+        help="Allow overriding forbidden actions with explicit confirmation (use with caution)"
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_coding_agent_loop(auto_mode=args.auto)
+    run_coding_agent_loop(auto_mode=args.auto, override_forbidden=args.override_forbidden)

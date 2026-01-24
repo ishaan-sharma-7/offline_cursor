@@ -34,6 +34,12 @@ from .approval import (
     get_tool_risk,
     request_approval,
 )
+from .forbidden import (
+    validate_command,
+    validate_path,
+    FORBIDDEN_COMMAND_PATTERNS,
+    FORBIDDEN_PATH_PATTERNS,
+)
 
 __all__ = [
     # Display
@@ -63,4 +69,9 @@ __all__ = [
     'ToolRisk',
     'get_tool_risk',
     'request_approval',
+    # Forbidden actions
+    'validate_command',
+    'validate_path',
+    'FORBIDDEN_COMMAND_PATTERNS',
+    'FORBIDDEN_PATH_PATTERNS',
 ]
