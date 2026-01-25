@@ -44,6 +44,44 @@ def show_tool_result(name: str, result: Dict) -> str:
         print(f"  {SUCCESS_COLOR}✓ Replaced lines {result['replaced_lines']}{RESET_COLOR}")
     elif name == "delete_lines":
         print(f"  {SUCCESS_COLOR}✓ Deleted lines {result['deleted_lines']}{RESET_COLOR}")
+    elif name == "apply_diff":
+        if result.get("action") == "applied":
+            print(f"  {SUCCESS_COLOR}✓ Applied diff to {result['path']}{RESET_COLOR}")
+            print(f"    Changed {result.get('lines_changed', 0)} lines")
+            if result.get('diff_preview'):
+                print(f"    Preview:")
+                # Show first 10 lines of diff
+                diff_lines = result['diff_preview'].split('\n')[:10]
+                for line in diff_lines:
+                    print(f"      {line}")
+                if len(result['diff_preview'].split('\n')) > 10:
+                    print(f"      ... (truncated)")
+    elif name == "auto_lint_format":
+        fmt = result.get("format_result", {})
+        lint = result.get("lint_result", {})
+
+        # Show formatting results
+        if fmt.get("changes_made"):
+            print(f"  {SUCCESS_COLOR}✓ Auto-formatted {result['path']}{RESET_COLOR}")
+            print(f"    Changed {fmt.get('lines_changed', 0)} lines")
+            if fmt.get('diff_preview'):
+                print(f"    Format diff (first 10 lines):")
+                for line in fmt['diff_preview'].split('\n')[:10]:
+                    print(f"      {line}")
+        elif fmt.get("formatted"):
+            print(f"  {SUCCESS_COLOR}✓ Already formatted: {result['path']}{RESET_COLOR}")
+
+        # Show lint warnings
+        if lint.get("linted"):
+            warnings = lint.get("warnings", [])
+            if warnings:
+                print(f"  ⚠️  {len(warnings)} lint warning(s):")
+                for w in warnings[:5]:  # Show first 5
+                    print(f"    Line {w['line']}: {w['message']} [{w['symbol']}]")
+                if len(warnings) > 5:
+                    print(f"    ... and {len(warnings) - 5} more")
+            else:
+                print(f"  {SUCCESS_COLOR}✓ No lint warnings{RESET_COLOR}")
     elif name == "view_file":
         print(f"  {SUCCESS_COLOR}✓ Viewing lines {result['showing_lines']}{RESET_COLOR}")
     elif name == "list_files":

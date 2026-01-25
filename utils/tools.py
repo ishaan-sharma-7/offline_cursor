@@ -1,9 +1,11 @@
 """File operation tools for the coding agent."""
+import difflib
+import json
 import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 
 def resolve_abs_path(path_str: str) -> Path:
@@ -287,3 +289,322 @@ def list_environment_tool() -> Dict[str, Any]:
             "action": "error",
             "error": str(e)
         }
+
+
+def find_occurrences(content: str, search: str) -> List[Tuple[int, int]]:
+    """
+    Find all occurrences of search string in content.
+
+    Args:
+        content: The full text content to search in
+        search: The exact string to find
+
+    Returns:
+        List of (start_pos, end_pos) tuples indicating position of each match.
+    """
+    occurrences = []
+    start = 0
+
+    while True:
+        pos = content.find(search, start)
+        if pos == -1:
+            break
+        occurrences.append((pos, pos + len(search)))
+        start = pos + 1  # Move forward to find overlapping matches
+
+    return occurrences
+
+
+def count_changed_lines(diff: str) -> int:
+    """
+    Count number of changed lines in unified diff.
+
+    Counts lines starting with + or - (excluding file headers +++ and ---).
+
+    Args:
+        diff: Unified diff string
+
+    Returns:
+        Number of lines that were added or removed
+    """
+    changed = 0
+    for line in diff.split('\n'):
+        if line.startswith('+') and not line.startswith('+++'):
+            changed += 1
+        elif line.startswith('-') and not line.startswith('---'):
+            changed += 1
+    return changed
+
+
+def apply_diff_tool(path: str, search_content: str, replace_content: str) -> Dict[str, Any]:
+    """
+    Apply a diff by finding and replacing exact text with context validation.
+
+    This tool is safer than line-based editing because it validates that the exact
+    text you want to change exists before making modifications. It prevents errors
+    from stale line numbers or unexpected file changes.
+
+    Args:
+        path: File path (resolved to absolute)
+        search_content: Exact text to find (must match exactly including whitespace)
+        replace_content: Text to replace with
+
+    Returns:
+        Dictionary with:
+        - action: "applied" | "error"
+        - path: absolute path
+        - lines_changed: number of lines modified
+        - diff_preview: unified diff showing change
+        - error: error message if failed (optional)
+
+    Examples:
+        # Fix a bug in a function
+        apply_diff(
+            path="script.py",
+            search_content="def add(a, b):\\n    return a - b",
+            replace_content="def add(a, b):\\n    return a + b"
+        )
+
+        # Update a variable
+        apply_diff(
+            path="config.py",
+            search_content="DEBUG = False",
+            replace_content="DEBUG = True"
+        )
+    """
+    full_path = resolve_abs_path(path)
+
+    # 1. Validate file exists
+    if not full_path.exists():
+        return {
+            "path": str(full_path),
+            "action": "error",
+            "error": "File does not exist.\n\nSuggestion: Use write_file to create it first."
+        }
+
+    try:
+        # 2. Read original content
+        original_content = full_path.read_text(encoding="utf-8")
+
+        # 3. Find search_content occurrences
+        occurrences = find_occurrences(original_content, search_content)
+
+        if len(occurrences) == 0:
+            search_preview = search_content[:200] + ("..." if len(search_content) > 200 else "")
+            return {
+                "path": str(full_path),
+                "action": "error",
+                "error": (
+                    f"Search content not found in file.\n\n"
+                    f"Searched for:\n---\n{search_preview}\n---\n\n"
+                    f"Suggestion: Use view_file to verify current content, then copy exact text."
+                )
+            }
+
+        if len(occurrences) > 1:
+            # Calculate approximate line numbers for each occurrence
+            lines_found = []
+            for start_pos, _ in occurrences:
+                line_num = original_content[:start_pos].count('\n') + 1
+                lines_found.append(str(line_num))
+
+            lines_str = ", ".join(lines_found)
+            return {
+                "path": str(full_path),
+                "action": "error",
+                "error": (
+                    f"Search content appears {len(occurrences)} times in file.\n\n"
+                    f"Found at approximate lines: {lines_str}\n\n"
+                    f"Suggestion: Include more surrounding context (like function signature or "
+                    f"preceding lines) to make the match unique."
+                )
+            }
+
+        # 4. Apply the replacement (exactly one match)
+        start_pos, end_pos = occurrences[0]
+        new_content = (
+            original_content[:start_pos] +
+            replace_content +
+            original_content[end_pos:]
+        )
+
+        # 5. Generate unified diff preview
+        original_lines = original_content.splitlines(keepends=True)
+        new_lines = new_content.splitlines(keepends=True)
+
+        diff_lines = list(difflib.unified_diff(
+            original_lines,
+            new_lines,
+            fromfile=f"a/{full_path.name}",
+            tofile=f"b/{full_path.name}",
+            lineterm=''
+        ))
+        diff_preview = '\n'.join(diff_lines)
+
+        # 6. Calculate changes
+        lines_changed = count_changed_lines(diff_preview)
+
+        # 7. Write new content
+        full_path.write_text(new_content, encoding="utf-8")
+
+        return {
+            "path": str(full_path),
+            "action": "applied",
+            "lines_changed": lines_changed,
+            "original_line_count": len(original_lines),
+            "new_line_count": len(new_lines),
+            "diff_preview": diff_preview[:1000]  # Limit size for display
+        }
+
+    except Exception as e:
+        return {
+            "path": str(full_path),
+            "action": "error",
+            "error": f"Failed to apply diff: {str(e)}"
+        }
+
+
+def format_python_file(path: Path) -> Dict[str, Any]:
+    """
+    Auto-format Python file using black and isort.
+
+    Returns:
+        Dictionary with formatting results and diff preview
+    """
+    if not path.exists() or path.suffix != '.py':
+        return {"formatted": False, "reason": "Not a Python file or doesn't exist"}
+
+    try:
+        # Read original content
+        original_content = path.read_text(encoding="utf-8")
+
+        # Run black (formatting)
+        subprocess.run(
+            ["black", "-q", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Run isort (import sorting)
+        subprocess.run(
+            ["isort", "-q", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Read formatted content
+        formatted_content = path.read_text(encoding="utf-8")
+
+        # Generate diff if changes were made
+        if original_content != formatted_content:
+            original_lines = original_content.splitlines(keepends=True)
+            formatted_lines = formatted_content.splitlines(keepends=True)
+
+            diff_lines = list(difflib.unified_diff(
+                original_lines,
+                formatted_lines,
+                fromfile=f"a/{path.name}",
+                tofile=f"b/{path.name}",
+                lineterm=''
+            ))
+            diff_preview = '\n'.join(diff_lines[:20])  # First 20 lines
+            lines_changed = count_changed_lines('\n'.join(diff_lines))
+
+            return {
+                "formatted": True,
+                "changes_made": True,
+                "lines_changed": lines_changed,
+                "diff_preview": diff_preview
+            }
+        else:
+            return {"formatted": True, "changes_made": False}
+
+    except subprocess.TimeoutExpired:
+        return {"formatted": False, "error": "Formatting timed out"}
+    except FileNotFoundError:
+        return {"formatted": False, "error": "black or isort not installed"}
+    except Exception as e:
+        return {"formatted": False, "error": str(e)}
+
+
+def lint_python_file(path: Path) -> Dict[str, Any]:
+    """
+    Lint Python file using pylint and return structured warnings.
+
+    Returns:
+        Dictionary with lint results and parsed warnings
+    """
+    if not path.exists() or path.suffix != '.py':
+        return {"linted": False, "reason": "Not a Python file or doesn't exist"}
+
+    try:
+        # Run pylint with JSON output
+        result = subprocess.run(
+            ["pylint", "--output-format=json", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+
+        # Parse JSON output
+        if result.stdout:
+            warnings = json.loads(result.stdout)
+
+            # Filter and format warnings
+            formatted_warnings = []
+            for warning in warnings[:10]:  # Limit to 10 most important
+                formatted_warnings.append({
+                    "line": warning.get("line", 0),
+                    "type": warning.get("type", "unknown"),
+                    "message": warning.get("message", ""),
+                    "symbol": warning.get("symbol", "")
+                })
+
+            return {
+                "linted": True,
+                "warnings": formatted_warnings,
+                "warning_count": len(warnings)
+            }
+        else:
+            return {"linted": True, "warnings": [], "warning_count": 0}
+
+    except subprocess.TimeoutExpired:
+        return {"linted": False, "error": "Linting timed out"}
+    except FileNotFoundError:
+        return {"linted": False, "error": "pylint not installed"}
+    except json.JSONDecodeError:
+        return {"linted": False, "error": "Failed to parse pylint output"}
+    except Exception as e:
+        return {"linted": False, "error": str(e)}
+
+
+def auto_lint_and_format(path: str) -> Dict[str, Any]:
+    """
+    Auto-format and lint a Python file, returning results with diffs and warnings.
+
+    This is the main tool that combines formatting and linting.
+
+    Args:
+        path: File path to format and lint
+
+    Returns:
+        Dictionary with:
+        - format_result: formatting changes and diff
+        - lint_result: linting warnings
+    """
+    full_path = resolve_abs_path(path)
+
+    # Format first
+    format_result = format_python_file(full_path)
+
+    # Then lint the formatted file
+    lint_result = lint_python_file(full_path)
+
+    return {
+        "path": str(full_path),
+        "action": "auto_lint_format",
+        "format_result": format_result,
+        "lint_result": lint_result
+    }

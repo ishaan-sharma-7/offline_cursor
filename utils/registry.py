@@ -14,6 +14,8 @@ from .tools import (
     delete_tool,
     check_installed_tool,
     list_environment_tool,
+    apply_diff_tool,
+    auto_lint_and_format,
 )
 
 
@@ -31,6 +33,8 @@ TOOL_REGISTRY = {
     "delete": delete_tool,
     "check_installed": check_installed_tool,
     "list_environment": list_environment_tool,
+    "apply_diff": apply_diff_tool,
+    "auto_lint_format": auto_lint_and_format,
 }
 
 
@@ -70,6 +74,14 @@ def execute_tool(name: str, args: Dict) -> Dict:
             return tool(args.get("package_type", ""), args.get("package_name", ""))
         elif name == "list_environment":
             return tool()
+        elif name == "apply_diff":
+            return tool(
+                args.get("path", ""),
+                args.get("search_content", ""),
+                args.get("replace_content", "")
+            )
+        elif name == "auto_lint_format":
+            return tool(args.get("path", ""))
         else:
             return {"error": f"No handler for tool: {name}"}
     except Exception as e:

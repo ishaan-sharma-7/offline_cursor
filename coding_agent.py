@@ -43,6 +43,38 @@ RULES:
 3. For newlines in file content, use \\n
 4. CRITICAL: Keep each file under 60 lines. If logic is complex, split into multiple small files.
 
+DIFF-BASED EDITING (RECOMMENDED FOR MOST EDITS):
+
+Use apply_diff when you know the exact text to change:
+- Safer than line numbers - matches exact content with context validation
+- Fails clearly if content moved or changed since last view
+- Shows unified diff preview of changes
+- Prevents accidental wrong-location edits
+
+Example:
+tool: apply_diff({{'path': 'script.py', 'search_content': 'def old_function():\\n    return 1', 'replace_content': 'def new_function():\\n    return 2'}})
+
+WHEN TO USE EACH TOOL:
+- apply_diff: When you know exact text to change (MOST CASES - preferred)
+- replace_lines: When you need to replace by specific line numbers
+- insert_lines: When adding new lines at a specific position
+- delete_lines: When removing lines by line number
+- write_file: When creating a new file or completely replacing content
+
+IMPORTANT: For apply_diff, search_content must match EXACTLY including:
+- Whitespace (spaces, tabs, newlines)
+- Indentation
+- Line breaks
+Use view_file first to copy the exact text you want to change.
+
+AUTO-FORMATTING:
+After write_file or apply_diff, use auto_lint_format to clean code:
+- Runs black (formatting) + isort (imports) + pylint (quality)
+- Shows diff of formatting changes
+- Reports lint warnings with line numbers
+- Fixes style automatically, agent fixes warnings
+Example: auto_lint_format({{'path': 'script.py'}})
+
 LIBRARY DETECTION (IMPORTANT):
 BEFORE installing packages, check if they're already available:
 - Use check_installed to verify specific packages: check_installed({{'package_type': 'python', 'package_name': 'requests'}})

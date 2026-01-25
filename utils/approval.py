@@ -27,6 +27,8 @@ TOOL_RISK_LEVELS: Dict[str, ToolRisk] = {
     "insert_lines": ToolRisk.MODERATE,
     "replace_lines": ToolRisk.MODERATE,
     "delete_lines": ToolRisk.MODERATE,
+    "apply_diff": ToolRisk.MODERATE,
+    "auto_lint_format": ToolRisk.MODERATE,
     # High - command execution and deletions
     "run_command": ToolRisk.HIGH,
     "delete": ToolRisk.HIGH,
@@ -75,6 +77,18 @@ def format_tool_preview(name: str, args: Dict[str, Any]) -> str:
         end = args.get("end", 1)
         return f"Delete lines {start}-{end} in '{path}'"
 
+    elif name == "apply_diff":
+        path = args.get("path", "unknown")
+        search = args.get("search_content", "")
+        replace = args.get("replace_content", "")
+        search_preview = search[:100] + "..." if len(search) > 100 else search
+        replace_preview = replace[:100] + "..." if len(replace) > 100 else replace
+        return f"Apply diff in '{path}':\nSearch for:\n{search_preview}\n\nReplace with:\n{replace_preview}"
+
+    elif name == "auto_lint_format":
+        path = args.get("path", "unknown")
+        return f"Auto-format and lint '{path}' (black + isort + pylint)"
+
     else:
         return f"{name}({args})"
 
@@ -101,7 +115,7 @@ def request_approval(name: str, args: Dict[str, Any]) -> Tuple[bool, str]:
             return False, f"FORBIDDEN: {error_msg}"
 
     # Path validation (context-aware: read vs write)
-    if name in ("write_file", "delete", "insert_lines", "replace_lines", "delete_lines"):
+    if name in ("write_file", "delete", "insert_lines", "replace_lines", "delete_lines", "apply_diff", "auto_lint_format"):
         path = args.get("path", "") or args.get("filename", "")
         is_safe, error_msg = validate_path(
             path,
