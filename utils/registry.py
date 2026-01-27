@@ -15,7 +15,7 @@ from .tools import (
     check_installed_tool,
     list_environment_tool,
     apply_diff_tool,
-    auto_lint_and_format,
+    task_complete_tool,
 )
 
 
@@ -34,7 +34,7 @@ TOOL_REGISTRY = {
     "check_installed": check_installed_tool,
     "list_environment": list_environment_tool,
     "apply_diff": apply_diff_tool,
-    "auto_lint_format": auto_lint_and_format,
+    "task_complete": task_complete_tool,
 }
 
 
@@ -80,8 +80,8 @@ def execute_tool(name: str, args: Dict) -> Dict:
                 args.get("search_content", ""),
                 args.get("replace_content", "")
             )
-        elif name == "auto_lint_format":
-            return tool(args.get("path", ""))
+        elif name == "task_complete":
+            return tool(args.get("summary", "Task completed"))
         else:
             return {"error": f"No handler for tool: {name}"}
     except Exception as e:

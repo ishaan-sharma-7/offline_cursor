@@ -57,7 +57,10 @@ def extract_tool_invocations(text: str, tool_registry: Dict) -> Tuple[List[Tuple
 
     match = re.search(r"tool:\s*(\w+)\s*\(", clean_text)
     if not match:
-        match = re.search(r"^(\w+)\s*\(\s*\{", clean_text, re.MULTILINE)
+        # Try matching tool_name(...) anywhere in text (not just line start)
+        # Build pattern from known tools for precise matching
+        tool_names_pattern = "|".join(re.escape(name) for name in tool_registry)
+        match = re.search(rf"({tool_names_pattern})\s*\(", clean_text)
         if not match:
             for tool_name in tool_registry:
                 if tool_name in text.lower():

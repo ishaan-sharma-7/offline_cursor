@@ -529,82 +529,21 @@ def format_python_file(path: Path) -> Dict[str, Any]:
         return {"formatted": False, "error": str(e)}
 
 
-def lint_python_file(path: Path) -> Dict[str, Any]:
-    """
-    Lint Python file using pylint and return structured warnings.
-
-    Returns:
-        Dictionary with lint results and parsed warnings
-    """
-    if not path.exists() or path.suffix != '.py':
-        return {"linted": False, "reason": "Not a Python file or doesn't exist"}
-
-    try:
-        # Run pylint with JSON output
-        result = subprocess.run(
-            ["pylint", "--output-format=json", str(path)],
-            capture_output=True,
-            text=True,
-            timeout=15
-        )
-
-        # Parse JSON output
-        if result.stdout:
-            warnings = json.loads(result.stdout)
-
-            # Filter and format warnings
-            formatted_warnings = []
-            for warning in warnings[:10]:  # Limit to 10 most important
-                formatted_warnings.append({
-                    "line": warning.get("line", 0),
-                    "type": warning.get("type", "unknown"),
-                    "message": warning.get("message", ""),
-                    "symbol": warning.get("symbol", "")
-                })
-
-            return {
-                "linted": True,
-                "warnings": formatted_warnings,
-                "warning_count": len(warnings)
-            }
-        else:
-            return {"linted": True, "warnings": [], "warning_count": 0}
-
-    except subprocess.TimeoutExpired:
-        return {"linted": False, "error": "Linting timed out"}
-    except FileNotFoundError:
-        return {"linted": False, "error": "pylint not installed"}
-    except json.JSONDecodeError:
-        return {"linted": False, "error": "Failed to parse pylint output"}
-    except Exception as e:
-        return {"linted": False, "error": str(e)}
-
-
-def auto_lint_and_format(path: str) -> Dict[str, Any]:
-    """
-    Auto-format and lint a Python file, returning results with diffs and warnings.
-
-    This is the main tool that combines formatting and linting.
+def task_complete_tool(summary: str) -> Dict[str, Any]:
+    """Signal that the current task is complete. Call this when you have finished the user's request.
 
     Args:
-        path: File path to format and lint
+        summary: Brief description of what was accomplished
 
     Returns:
-        Dictionary with:
-        - format_result: formatting changes and diff
-        - lint_result: linting warnings
+        Confirmation that task completion was recorded
+
+    Example:
+        task_complete({"summary": "Created hello_world.py and ran it successfully"})
     """
-    full_path = resolve_abs_path(path)
-
-    # Format first
-    format_result = format_python_file(full_path)
-
-    # Then lint the formatted file
-    lint_result = lint_python_file(full_path)
-
     return {
-        "path": str(full_path),
-        "action": "auto_lint_format",
-        "format_result": format_result,
-        "lint_result": lint_result
+        "action": "task_complete",
+        "summary": summary,
+        "status": "completed"
     }
+

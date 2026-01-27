@@ -16,7 +16,6 @@ from .loop_detection import (
 )
 from .parsing import (
     extract_tool_invocations,
-    normalize_multiline_strings,
 )
 from .registry import (
     TOOL_REGISTRY,
@@ -55,7 +54,6 @@ __all__ = [
     'detect_loop',
     # Parsing
     'extract_tool_invocations',
-    'normalize_multiline_strings',
     # Registry
     'TOOL_REGISTRY',
     'get_tool_str_representation',

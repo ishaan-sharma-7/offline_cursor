@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
+from .streaming import StreamMode
 
 
 class ApprovalMode(Enum):
@@ -15,6 +16,9 @@ class AgentConfig:
     """Runtime configuration for the coding agent."""
     approval_mode: ApprovalMode = ApprovalMode.MANUAL
     enable_forbidden_overrides: bool = False  # Allow overriding forbidden actions with confirmation
+
+    # Streaming feature
+    stream_mode: StreamMode = StreamMode.THOUGHTS
 
     def is_auto_mode(self) -> bool:
         """Check if running in auto mode."""
@@ -37,11 +41,24 @@ def get_config() -> AgentConfig:
     return _config
 
 
-def init_config(auto_mode: bool = False, override_forbidden: bool = False) -> AgentConfig:
+def init_config(
+    auto_mode: bool = False,
+    override_forbidden: bool = False,
+    stream_mode: str = "silent"
+) -> AgentConfig:
     """Initialize config with CLI arguments."""
     global _config
+
+    # Map stream mode string to enum
+    stream_mode_enum = {
+        "silent": StreamMode.SILENT,
+        "thoughts": StreamMode.THOUGHTS,
+        "full": StreamMode.FULL
+    }.get(stream_mode.lower(), StreamMode.SILENT)
+
     _config = AgentConfig(
         approval_mode=ApprovalMode.AUTO if auto_mode else ApprovalMode.MANUAL,
-        enable_forbidden_overrides=override_forbidden
+        enable_forbidden_overrides=override_forbidden,
+        stream_mode=stream_mode_enum
     )
     return _config

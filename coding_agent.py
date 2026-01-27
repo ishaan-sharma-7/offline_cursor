@@ -1,6 +1,8 @@
 import argparse
 import json
+import os
 import ollama
+from pathlib import Path
 from typing import Dict, List, Set
 
 # Import all utilities, tools, and helpers from utils.py
@@ -42,6 +44,7 @@ RULES:
 2. One tool per response - act immediately
 3. For newlines in file content, use \\n
 4. CRITICAL: Keep each file under 60 lines. If logic is complex, split into multiple small files.
+5. WHEN DONE: Call task_complete({{"summary": "what you did"}}) to signal completion
 
 DIFF-BASED EDITING (RECOMMENDED FOR MOST EDITS):
 
@@ -112,6 +115,41 @@ def get_full_system_prompt():
     return SYSTEM_PROMPT.format(tool_list_repr=tool_str_repr)
 
 
+def is_completion_response(response: str) -> bool:
+    """
+    Detect if a response indicates task completion (vs explanation/question).
+
+    Returns True if the response sounds like the agent is reporting success,
+    NOT if it's explaining or asking questions.
+    """
+    response_lower = response.lower()
+
+    # Strong completion indicators
+    completion_phrases = [
+        'successfully', 'has been created', 'has been executed',
+        'is ready', 'is complete', 'completed successfully',
+        'task complete', 'all done', 'finished',
+        'script works', 'runs correctly', 'output is correct',
+        'you can now', 'feel free to', 'let me know if',
+    ]
+
+    # Negative indicators (explanations, questions)
+    explanation_indicators = [
+        'let me explain', 'here is how', 'this works by',
+        'would you like', 'do you want', 'should i',
+        'i can also', 'alternatively', 'another option',
+    ]
+
+    # Check for completion phrases
+    has_completion = any(phrase in response_lower for phrase in completion_phrases)
+
+    # Check for explanation indicators
+    has_explanation = any(phrase in response_lower for phrase in explanation_indicators)
+
+    # It's a completion if it has completion phrases and isn't primarily an explanation
+    return has_completion and not has_explanation
+
+
 def execute_llm_call(conversation: List[Dict[str, str]]):
     """Execute an LLM call via Ollama."""
     response = ollama.chat(
@@ -128,6 +166,15 @@ def execute_llm_call(conversation: List[Dict[str, str]]):
 
 
 def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = False):
+    # AUTOMATIC PROJECT ISOLATION
+    # Change to projects/ directory so agent cannot access parent files
+    projects_dir = Path.cwd() / "projects"
+    projects_dir.mkdir(exist_ok=True)
+    os.chdir(projects_dir)
+
+    print(f"{SUCCESS_COLOR}🔒 Working directory changed to: {projects_dir}{RESET_COLOR}")
+    print(f"{SUCCESS_COLOR}   Agent is isolated from parent files for safety{RESET_COLOR}\n")
+
     # Initialize config
     config = init_config(auto_mode=auto_mode, override_forbidden=override_forbidden)
 
@@ -175,13 +222,15 @@ def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = Fa
             if not tool_invocations:
                 consecutive_no_tool += 1
 
-                response_lower = response.lower()
-                done_signals = ['task complete', 'finished creating', 'all files created', 'project is ready', 'done.']
-                if any(sig in response_lower for sig in done_signals):
-                    print(f"{SUCCESS_COLOR}Agent reports completion:{RESET_COLOR} {response[:200]}")
+                # Check if response sounds like completion
+                if is_completion_response(response):
+                    print(f"{SUCCESS_COLOR}✓ Agent reports completion:{RESET_COLOR} {response[:150]}")
                     if created_files:
                         print(f"{SUCCESS_COLOR}Files created: {', '.join(created_files)}{RESET_COLOR}")
-                    break
+                    # Give agent one chance to call task_complete
+                    conversation.append({"role": "assistant", "content": response})
+                    conversation.append({"role": "user", "content": "If task is done, call: tool: task_complete({\"summary\": \"brief description\"})"})
+                    continue
 
                 if parse_error:
                     print(f"  {ERROR_COLOR}⚠️ Parse error: {parse_error}{RESET_COLOR}")
@@ -197,13 +246,13 @@ def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = Fa
                 print(f"    Preview: {response[:150]}...")
 
                 if consecutive_no_tool >= 2:
-                    nudge = "STOP EXPLAINING. You must call a tool NOW. Example: tool: write_file({\"path\": \"file.py\", \"content\": \"code\"})"
+                    nudge = "Call a tool or call task_complete if done. Example: tool: task_complete({\"summary\": \"what was done\"})"
                     conversation.append({"role": "assistant", "content": response})
                     conversation.append({"role": "user", "content": nudge})
                     consecutive_no_tool = 0
                 else:
                     conversation.append({"role": "assistant", "content": response})
-                    conversation.append({"role": "user", "content": "Call the tool now. Do not explain."})
+                    conversation.append({"role": "user", "content": "Call the next tool."})
                 continue
 
             consecutive_no_tool = 0
@@ -233,6 +282,13 @@ def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = Fa
 
             conversation.append({"role": "assistant", "content": response})
 
+            # Handle task_complete specially - end the loop
+            if name == "task_complete":
+                print(f"{SUCCESS_COLOR}✓ Task completed: {args.get('summary', 'No summary')}{RESET_COLOR}")
+                if created_files:
+                    print(f"{SUCCESS_COLOR}Files created: {', '.join(created_files)}{RESET_COLOR}")
+                break
+
             result = execute_tool(name, args)
             hint = show_tool_result(name, result)
 
@@ -247,20 +303,18 @@ def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = Fa
             if name == "run_command":
                 returncode = result.get("returncode", 0)
                 stderr = result.get("stderr", "").strip()
-                stdout = result.get("stdout", "").strip()
-                
+
                 if returncode != 0:
                     if stderr:
                         error_history.append(stderr)
                         if len(error_history) > 5:
                             error_history.pop(0)
                     result_str = f"ERROR:\n{stderr}\n\nFull result: {json.dumps(result)}"
-                
-                elif not stdout and not stderr:
-                    result_str = f"{json.dumps(result)}\n\nSUCCESS: Program ran successfully (returncode=0). Interactive programs like games don't produce console output. Task complete."
-                
+
                 else:
+                    # SUCCESS - prompt for completion
                     result_str = json.dumps(result)
+                    result_str += "\n\nSUCCESS (returncode=0). If the task is complete, call: tool: task_complete({\"summary\": \"what was done\"})"
             else:
                 result_str = json.dumps(result)
                 if len(result_str) > 3000:
