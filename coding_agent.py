@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import ollama
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -30,6 +29,7 @@ from utils import (
     get_config,
     request_approval,
 )
+from utils.streaming import execute_llm_streaming
 
 
 SYSTEM_PROMPT = """You are Qwen, a coding agent that completes tasks by calling tools.
@@ -151,21 +151,12 @@ def is_completion_response(response: str) -> bool:
 
 
 def execute_llm_call(conversation: List[Dict[str, str]]):
-    """Execute an LLM call via Ollama."""
-    response = ollama.chat(
-        model="qwen2.5-coder:14b", # use your local Ollama model
-        messages=conversation,
-        options={
-            "temperature": 0.0,
-            "num_predict": 4096,
-            "num_ctx": 8192,
-            "stop": ["User:", "\n\nYou (type"],
-        }
-    )
-    return response['message']['content']
+    """Execute an LLM call via Ollama with streaming support."""
+    config = get_config()
+    return execute_llm_streaming(conversation, config.stream_mode)
 
 
-def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = False):
+def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = False, stream_mode: str = "silent"):
     # AUTOMATIC PROJECT ISOLATION
     # Change to projects/ directory so agent cannot access parent files
     projects_dir = Path.cwd() / "projects"
@@ -176,7 +167,7 @@ def run_coding_agent_loop(auto_mode: bool = False, override_forbidden: bool = Fa
     print(f"{SUCCESS_COLOR}   Agent is isolated from parent files for safety{RESET_COLOR}\n")
 
     # Initialize config
-    config = init_config(auto_mode=auto_mode, override_forbidden=override_forbidden)
+    config = init_config(auto_mode=auto_mode, override_forbidden=override_forbidden, stream_mode=stream_mode)
 
     conversation = [{"role": "system", "content": get_full_system_prompt()}]
     MAX_STEPS = 50
@@ -356,9 +347,15 @@ During a session, type 'a' or 'auto' at any approval prompt to switch to auto mo
         action="store_true",
         help="Allow overriding forbidden actions with explicit confirmation (use with caution)"
     )
+    parser.add_argument(
+        "--stream", "-s",
+        choices=["silent", "thoughts", "full"],
+        default="silent",
+        help="Streaming mode: silent (no output), thoughts (stream thinking), full (stream all)"
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_coding_agent_loop(auto_mode=args.auto, override_forbidden=args.override_forbidden)
+    run_coding_agent_loop(auto_mode=args.auto, override_forbidden=args.override_forbidden, stream_mode=args.stream)

@@ -1,5 +1,45 @@
 # Model Configuration Guide
 
+## CLI Commands
+
+Run the agent with different flags:
+
+```bash
+# Default (manual approval mode, no streaming)
+python coding_agent.py
+
+# Auto mode - no approval prompts
+python coding_agent.py --auto
+python coding_agent.py -a
+
+# Stream LLM output (see thinking in real-time)
+python coding_agent.py --stream thoughts
+python coding_agent.py -s full
+
+# Combine flags
+python coding_agent.py --auto --stream thoughts
+python coding_agent.py -a -s full
+
+# Allow dangerous operations (use with caution)
+python coding_agent.py --override-forbidden
+```
+
+### Available Flags
+
+| Flag | Short | Values | Description |
+|------|-------|--------|-------------|
+| `--auto` | `-a` | - | Run without approval prompts |
+| `--stream` | `-s` | `silent`, `thoughts`, `full` | Control LLM output streaming |
+| `--override-forbidden` | - | - | Allow dangerous operations with confirmation |
+
+### Stream Modes
+
+- **silent** (default): No streaming, just final output
+- **thoughts**: Stream LLM thinking in real-time
+- **full**: Stream everything (same as thoughts)
+
+---
+
 ## Quick Start: Change the Model in ONE Place
 
 To use a different Ollama model, edit **only this file**:
